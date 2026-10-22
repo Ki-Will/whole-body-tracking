@@ -146,7 +146,7 @@ Record detection FPS, track fragmentation, ID switches, face/body association pr
 
 - A person detector and a face detector do not provide biometric identity.
 - Geometry-only face/body matching can be ambiguous when people overlap or cross.
-- YOLOX ONNX output formats vary; this implementation supports standard decoded/raw YOLOX outputs but may require a small adapter for a custom export.
+- YOLOX ONNX output formats vary; the current decoder expects decoded `[cx, cy, width, height, objectness, class scores...]` rows. Raw grid outputs or custom layouts need an export-specific decoder adapter.
 - CPU throughput depends on model size, input resolution, camera resolution, and system load.
 
 ## License
