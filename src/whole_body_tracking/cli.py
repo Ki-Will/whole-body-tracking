@@ -12,6 +12,8 @@ from .association import associate_faces_to_bodies
 from .identity_state import IdentityState
 from .tracking.manager import TrackManager
 from .visualization import FPSMeter, draw_overlay
+from .face_landmarks import detect_faces_with_landmarks
+from .face_recognition import ArcFaceEmbedder, FaceIdentityDatabase, align_face
 
 
 def build_parser():
@@ -24,6 +26,9 @@ def build_parser():
     run = sub.add_parser("run", help="run person tracking on webcam or video")
     run.add_argument("--model", default=str(Settings().person_model))
     run.add_argument("--face-model", default=str(Settings().face_model))
+    run.add_argument("--arcface-model", default=None, help="ArcFace ONNX model for enrolled identity recognition")
+    run.add_argument("--face-database", default="data/db/face_db.npz", help="local enrolled face database")
+    run.add_argument("--match-threshold", type=float, default=0.45, help="cosine similarity threshold; calibrate for your model")
     run.add_argument("--camera", type=int, default=Settings().camera_index)
     run.add_argument("--source", default=None, help="video path; takes precedence over --camera")
     run.add_argument("--input-size", type=int, default=None)
@@ -58,6 +63,11 @@ def main():
             if args.face_backend == "yunet" else HaarFaceDetector()
         )
 
+    embedder = ArcFaceEmbedder(args.arcface_model) if getattr(args, "arcface_model", None) else None
+    face_db = FaceIdentityDatabase(args.face_database) if embedder else None
+    if embedder and not face_db.templates:
+        raise RuntimeError(f"No enrolled identities in {args.face_database}. Enroll first with: python -m whole_body_tracking.enrollment --name YOUR_NAME --camera {args.camera} --face-model {args.face_model} --arcface-model {args.arcface_model}")
+
     source = args.source if args.source is not None else args.camera
     capture = cv2.VideoCapture(source)
     if not capture.isOpened():
@@ -78,7 +88,8 @@ def main():
             timestamp = time.perf_counter() - started
             detections = detector.detect(frame)
             tracks = manager.update(detections, timestamp)
-            faces = face_detector.detect(frame) if face_detector else []
+            face_records = detect_faces_with_landmarks(face_detector, frame) if face_detector and embedder and args.face_backend == "yunet" else []
+            faces = [record["box"] for record in face_records] if face_records else (face_detector.detect(frame) if face_detector else [])
             # Only associate faces with bodies detected in this frame.
             # Stale predicted boxes remain visible but cannot claim a face.
             active_indices = [i for i, track in enumerate(tracks) if track.missed_frames == 0]
