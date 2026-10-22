@@ -208,7 +208,7 @@ def main():
                         cv2.rectangle(view, (x1-4,y1-4), (x2+4,y2+4), (0,0,255), 3)
                         cv2.putText(view, "LOCKED TARGET", (max(4,x1), max(18,y1-28)),
                                     cv2.FONT_HERSHEY_SIMPLEX, 0.55, (0,0,255), 2, cv2.LINE_AA)
-                cv2.putText(view, "e=enroll  r=recognize  l=lock/unlock  q=quit",
+                cv2.putText(view, "e=enroll  r=recognize  b=body lock  f=face lock  l=unlock  q=quit",
                             (12, view.shape[0]-14), cv2.FONT_HERSHEY_SIMPLEX, 0.48,
                             (255,255,255), 1, cv2.LINE_AA)
                 cv2.imshow("Whole-Body Tracking (CPU)", view)
@@ -216,17 +216,24 @@ def main():
                 if key in (ord("q"), 27):
                     break
                 if key == ord("l"):
-                    if locked_track_id is not None:
-                        print("[LOCK] target unlocked")
-                        locked_track_id = None
+                    locked_track_id = None
+                    print("[LOCK] target unlocked")
+                if key in (ord("b"), ord("f")):
+                    cx, cy = frame.shape[1]/2, frame.shape[0]/2
+                    eligible = [
+                        t for i, t in enumerate(tracks)
+                        if t.missed_frames == 0 and
+                        (key == ord("b") or i in associations)
+                    ]
+                    target = min(eligible,
+                        key=lambda t: ((float(t.box[0]+t.box[2])/2-cx)**2 +
+                                       (float(t.box[1]+t.box[3])/2-cy)**2), default=None)
+                    if target is not None:
+                        locked_track_id = target.track_id
+                        mode = "body" if key == ord("b") else "face-associated body"
+                        print(f"[LOCK] {mode} track {locked_track_id} selected; visual lock only")
                     else:
-                        cx, cy = frame.shape[1]/2, frame.shape[0]/2
-                        target = min((t for t in tracks if t.missed_frames == 0),
-                            key=lambda t: ((float(t.box[0]+t.box[2])/2-cx)**2 +
-                                           (float(t.box[1]+t.box[3])/2-cy)**2), default=None)
-                        if target is not None:
-                            locked_track_id = target.track_id
-                            print(f"[LOCK] body track {locked_track_id} selected; visual lock only")
+                        print("[LOCK] no eligible target detected")
                 if key in (ord("e"), ord("r")):
                     target_id = locked_track_id
                     if target_id is None and tracks:
