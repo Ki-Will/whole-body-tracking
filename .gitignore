@@ -11,9 +11,8 @@ build/
 # Virtual environments and local settings
 .venv/
 venv/
-.env
-.env.*
 !.env.example
+temp_auto_push.bat
 
 # Model weights and local media (do not commit these)
 models/*
@@ -27,7 +26,10 @@ models/*
 *.mov
 
 # Editors / OS
-.vscode/
 .idea/
 .DS_Store
 Thumbs.db
+.gitignore
+branch_structure.json
+config.bat
+node_modules
