@@ -36,7 +36,7 @@ def build_parser():
     run.add_argument("--face-model", default=str(Settings().face_model))
     run.add_argument("--arcface-model", default=None, help="ArcFace ONNX model for enrolled identity recognition")
     run.add_argument("--face-database", default="data/db/face_db.npz", help="local enrolled face database")
-    run.add_argument("--match-threshold", type=float, default=0.45, help="cosine similarity threshold; calibrate for your model")
+    run.add_argument("--match-threshold", type=float, default=0.55, help="cosine similarity threshold; calibrate for your model")
     run.add_argument("--camera", type=int, default=Settings().camera_index)
     run.add_argument("--source", default=None, help="video path; takes precedence over --camera")
     run.add_argument("--input-size", type=int, default=None)
@@ -101,6 +101,9 @@ def main():
                 break
             timestamp = time.perf_counter() - started
             detections = detector.detect(frame)
+            if frame_count % 30 == 0:
+                for i, det in enumerate(detections):
+                    print(f"[DETECTOR] {i}: box={det.box}, score={det.score:.3f}")
             tracks = manager.update(detections, timestamp)
             face_records = detect_faces_with_landmarks(face_detector, frame) if face_detector and embedder and args.face_backend == "yunet" else []
             faces = [record["box"] for record in face_records] if face_records else (face_detector.detect(frame) if face_detector else [])
@@ -114,6 +117,32 @@ def main():
                 active_indices[body_index]: face_index
                 for body_index, face_index in local_associations.items()
             }
+            
+            if frame_count % 30 == 0:
+                print(f"\n[DEBUG] frame={frame_count}")
+                print(f"Faces detected: {len(faces)}")
+
+                for i, face in enumerate(faces):
+                    fx1, fy1, fx2, fy2 = map(float, face)
+                    print(
+                        f"  Face {i}: {face} | "
+                        f"center=({(fx1 + fx2) / 2:.1f}, "
+                        f"{(fy1 + fy2) / 2:.1f})"
+                    )
+
+                print(f"Bodies detected: {len(active_indices)}")
+
+                for i, track_index in enumerate(active_indices):
+                    body = tracks[track_index].box
+                    bx1, by1, bx2, by2 = map(float, body)
+                    print(
+                        f"  Body {i} (track {tracks[track_index].track_id}): {body} | "
+                        f"size=({bx2 - bx1:.1f} x {by2 - by1:.1f})"
+                    )
+
+                print(f"Associations: {local_associations}")
+
+
 
             associated_indices = set(associations)
             for body_index in associated_indices:
@@ -123,6 +152,31 @@ def main():
                     try:
                         vector = embedder.embed(align_face(frame, face_records[face_index]["landmarks"]))
                         matched_name, similarity = face_db.match(vector, threshold=args.match_threshold)
+
+                        if frame_count % 30 == 0:
+                            print(f"\n[DEBUG] frame={frame_count}")
+                            print(f"Faces detected: {len(faces)}")
+
+                            for i, face in enumerate(faces):
+                                fx1, fy1, fx2, fy2 = map(float, face)
+                                print(
+                                    f"  Face {i}: {face} | "
+                                    f"center=({(fx1 + fx2) / 2:.1f}, "
+                                    f"{(fy1 + fy2) / 2:.1f})"
+                                )
+
+                            print(f"Bodies detected: {len(active_indices)}")
+
+                            for i, track_index in enumerate(active_indices):
+                                body = tracks[track_index].box
+                                bx1, by1, bx2, by2 = map(float, body)
+                                print(
+                                    f"  Body {i} (track {tracks[track_index].track_id}): {body} | "
+                                    f"size=({bx2 - bx1:.1f} x {by2 - by1:.1f})"
+                                )
+
+                            print(f"Associations: {local_associations}")
+
                         if matched_name is not None:
                             track.identity.observe_face(timestamp, max(0.0, min(1.0, similarity)))
                             track.identity_name = matched_name
