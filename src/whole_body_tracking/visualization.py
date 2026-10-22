@@ -77,9 +77,10 @@ def draw_overlay(frame, tracks, associations, faces, fps: float, timestamp: floa
         color = BODY_COLORS[visibility]
         cv2.rectangle(output, (x1, y1), (x2, y2), color, 2)
         confidence = track.identity.confidence(timestamp)
+        identity_name = getattr(track, "identity_name", None) or "UNENROLLED"
         label = (
             f"ID {track.track_id} | {visibility} | "
-            f"IDENTITY {identity_state} | C={confidence:.2f}"
+            f"{identity_name} {identity_state} | C={confidence:.2f}"
         )
         cv2.putText(
             output, label, (max(4, x1), max(18, y1 - 8)),
