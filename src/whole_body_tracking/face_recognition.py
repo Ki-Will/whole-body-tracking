@@ -91,7 +91,7 @@ class FaceIdentityDatabase:
             json.dumps(metadata, indent=2), encoding="utf-8"
         )
 
-    def match(self, embedding: np.ndarray, threshold: float = 0.45) -> tuple[Optional[str], float]:
+    def match(self, embedding: np.ndarray, threshold: float = 0.55) -> tuple[Optional[str], float]:
         if not self.templates:
             return None, 0.0
         scores = {
