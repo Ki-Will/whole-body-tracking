@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments and local settings
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# Model weights and local media (do not commit these)
+models/*
+!models/.gitkeep
+*.onnx
+*.pt
+*.pth
+*.engine
+*.mp4
+*.avi
+*.mov
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
