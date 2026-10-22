@@ -6,7 +6,7 @@ CPU-first webcam computer vision for person detection, face-to-body association,
 
 ## Goals
 
-- Detect people with a pretrained YOLOX ONNX model.
+- Detect people with a pretrained YOLOX or MediaPipe person-detection ONNX model.
 - Detect faces with OpenCV YuNet; optionally compare against Haar Cascade.
 - Associate faces with person boxes using spatial geometry, not face recognition.
 - Track people between frames using IoU assignment and Kalman motion prediction.
@@ -21,7 +21,7 @@ This project does **not** identify people by name or perform biometric face reco
 - Python 3.10 or 3.11 recommended
 - CPU with AVX support recommended; no GPU required
 - Webcam or video file for testing
-- A pretrained YOLOX ONNX file downloaded separately
+- A pretrained YOLOX or MediaPipe person-detection ONNX file downloaded separately
 - A YuNet ONNX face detector file downloaded separately
 
 See [Model setup](#model-setup). Model weights are excluded from Git and are not downloaded by the initializer.
@@ -47,7 +47,8 @@ On Debian/Kali, if OpenCV cannot open a camera because GUI/video dependencies ar
 
 Download model files from their official project sources and put them under `models/` (the directory is ignored by Git).
 
-- **YOLOX person detector:** choose a pretrained YOLOX ONNX export compatible with this project's YOLOX output decoder. YOLOX-Nano/Tiny are the first CPU benchmarks; YOLOX-S is a heavier alternative. The legacy release asset named `yolox.onnx` is a large YOLOX-X model, not a generic modern `yolo.onnx` model.
+- **MediaPipe person detector (recommended for a fast CPU baseline):** download `person_detection_mediapipe_2023mar.onnx` from the [OpenCV Zoo model directory](https://github.com/opencv/opencv_zoo/tree/main/models/person_detection_mediapipe). It uses a fixed 224×224 input and model-specific SSD anchor/score decoding.
+- **YOLOX person detector:** choose a pretrained YOLOX ONNX export compatible with the project's YOLOX decoder. YOLOX-Nano/Tiny are the first CPU benchmarks; YOLOX-S is a heavier alternative.
 - **YuNet face detector:** obtain the ONNX file from the [OpenCV Zoo YuNet model directory](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet).
 - Optional Haar baseline uses the frontal-face cascade bundled with OpenCV; no extra model download is needed.
 
@@ -55,35 +56,43 @@ Expected default paths:
 
 ```text
 models/yolox_tiny.onnx
+models/person_detection_mediapipe_2023mar.onnx
 models/face_detection_yunet_2023mar.onnx
 ```
 
-Override them using CLI flags if your filenames differ. Do not rename an incompatible model merely to match the example path. ONNX exports can differ in output decoding, input dimensions, and output tensor shapes; run the model check before live inference.
+Model weights are not committed to Git. Override paths using CLI flags if your filenames differ.
 
 ## Run
 
-Inspect the selected model's input/output tensors:
+Inspect a model's input/output tensors:
 
 ```bash
-python -m whole_body_tracking.cli check-model --model models/yolox_tiny.onnx
+python -m whole_body_tracking.cli check-model --person-backend mediapipe
 ```
 
-Start webcam detection (YuNet face detection and association are enabled by default):
+Run webcam person tracking using MediaPipe:
 
 ```bash
 python -m whole_body_tracking.cli run \
-  --model models/yolox_tiny.onnx \
+  --person-backend mediapipe \
+  --model models/person_detection_mediapipe_2023mar.onnx \
   --face-model models/face_detection_yunet_2023mar.onnx \
   --camera 0
 ```
 
-Use a video file instead of a webcam:
+Run the existing YOLOX backend:
 
 ```bash
-python -m whole_body_tracking.cli run --model models/yolox_tiny.onnx --source ./sample.mp4
+python -m whole_body_tracking.cli run \
+  --person-backend yolox \
+  --model models/yolox_s.onnx \
+  --face-model models/face_detection_yunet_2023mar.onnx \
+  --camera 0
 ```
 
-For a different model input size, pass `--input-size 416`; set `--no-face` to isolate person detection. Press `q` or `Esc` to quit.
+Use a video file instead of a webcam by passing `--source ./sample.mp4`. Set `--no-face` to isolate person detection. Press `q` or `Esc` to quit.
+
+MediaPipe's default person confidence threshold is 0.5 and NMS IoU is 0.3. Override them with `--confidence` and `--nms-iou`. YOLOX retains its existing configuration defaults.
 
 ## State model
 
@@ -101,22 +110,19 @@ A Kalman prediction is only motion evidence; it is not identity proof. When cros
 
 ```text
 whole-body-tracking/
-├── models/                     # local model files; intentionally not committed
+├── models/                           # local model files; intentionally not committed
 ├── src/whole_body_tracking/
-│   ├── cli.py                  # command-line entry point
-│   ├── config.py               # runtime settings
-│   ├── detectors/yolox_onnx.py # CPU ONNX person detector
-│   ├── detectors/yunet.py      # YuNet face detector
-│   ├── detectors/haar.py       # optional face-detection baseline
-│   ├── tracking/kalman.py      # constant-velocity box filter
-│   ├── tracking/manager.py     # track lifecycle and IoU assignment
-│   ├── association.py          # face-to-body geometry
-│   ├── identity_state.py       # three-state model and decay
-│   ├── centering.py            # normalized target-centre offset
-│   └── visualization.py        # overlay and FPS
+│   ├── cli.py                        # command-line entry point
+│   ├── config.py                     # runtime settings
+│   ├── detectors/mediapipe_person.py # MediaPipe SSD person detector
+│   ├── detectors/yolox_onnx.py       # YOLOX ONNX person detector
+│   ├── detectors/yunet.py            # YuNet face detector
+│   ├── detectors/haar.py             # optional face-detection baseline
+│   ├── tracking/                     # track lifecycle and motion prediction
+│   ├── association.py                # face-to-body geometry
+│   ├── identity_state.py             # three-state model and decay
+│   └── visualization.py              # overlay and FPS
 ├── tests/
-├── .env.example
-├── .gitignore
 ├── pyproject.toml
 └── requirements.txt
 ```
@@ -128,7 +134,7 @@ python -m pytest
 python -m compileall -q src tests
 ```
 
-The unit tests do not require model weights or a webcam. Full integration checks require valid local ONNX files and camera access.
+Unit tests do not require model weights or a webcam. Full integration checks require valid local ONNX files and camera access.
 
 ## Evaluation plan
 
@@ -146,7 +152,8 @@ Record detection FPS, track fragmentation, ID switches, face/body association pr
 
 - A person detector and a face detector do not provide biometric identity.
 - Geometry-only face/body matching can be ambiguous when people overlap or cross.
-- YOLOX ONNX output formats vary; the current decoder expects decoded `[cx, cy, width, height, objectness, class scores...]` rows. Raw grid outputs or custom layouts need an export-specific decoder adapter.
+- The MediaPipe adapter implements the OpenCV Zoo model's 224×224 RGB normalization, SSD anchors, sigmoid scores, box decoding, and NMS; other MediaPipe exports may use different conventions.
+- YOLOX ONNX output formats vary and may require an export-specific decoder.
 - CPU throughput depends on model size, input resolution, camera resolution, and system load.
 
 ## License
