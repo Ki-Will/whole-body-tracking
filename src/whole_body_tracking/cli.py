@@ -104,8 +104,21 @@ def main():
             associated_indices = set(associations)
             for body_index in associated_indices:
                 track = tracks[body_index]
-                face_confidence = max(0.0, min(1.0, float(track.score)))
-                track.identity.observe_face(timestamp, face_confidence)
+                face_index = associations[body_index]
+                if embedder is not None and face_db is not None and face_records and args.face_backend == "yunet":
+                    try:
+                        vector = embedder.embed(align_face(frame, face_records[face_index]["landmarks"]))
+                        matched_name, similarity = face_db.match(vector, threshold=args.match_threshold)
+                        if matched_name is not None:
+                            track.identity.observe_face(timestamp, max(0.0, min(1.0, similarity)))
+                            track.identity_name = matched_name
+                        else:
+                            track.identity.update(timestamp, body_track_valid=True)
+                    except (ValueError, cv2.error):
+                        track.identity.update(timestamp, body_track_valid=True)
+                else:
+                    # A face detection or geometric association alone cannot confirm identity.
+                    track.identity.update(timestamp, body_track_valid=True)
             for index, track in enumerate(tracks):
                 if index not in associated_indices:
                     track.identity.update(
