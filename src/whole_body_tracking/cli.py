@@ -23,6 +23,14 @@ def build_parser():
     check.add_argument("--model", default=str(Settings().person_model))
     check.add_argument("--input-size", type=int, default=None)
 
+    enroll_cmd = sub.add_parser("enroll", help="enroll a face locally using a webcam")
+    enroll_cmd.add_argument("--name", required=True)
+    enroll_cmd.add_argument("--camera", type=int, default=0)
+    enroll_cmd.add_argument("--face-model", required=True)
+    enroll_cmd.add_argument("--arcface-model", required=True)
+    enroll_cmd.add_argument("--face-database", default="data/db/face_db.npz")
+    enroll_cmd.add_argument("--samples", type=int, default=15)
+
     run = sub.add_parser("run", help="run person tracking on webcam or video")
     run.add_argument("--model", default=str(Settings().person_model))
     run.add_argument("--face-model", default=str(Settings().face_model))
@@ -45,6 +53,12 @@ def build_parser():
 
 def main():
     args = build_parser().parse_args()
+    if args.command == "enroll":
+        from .enrollment import enroll
+        if args.samples < 3:
+            raise SystemExit("--samples must be at least 3")
+        return enroll(args.name, args.camera, args.face_model, args.arcface_model, args.face_database, args.samples)
+
     if args.command == "check-model":
         detector = YOLOXONNXDetector(args.model, input_size=args.input_size)
         for tensor in detector.describe():
