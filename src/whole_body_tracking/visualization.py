@@ -27,7 +27,7 @@ class FPSMeter:
         return self.fps
 
 
-def draw_overlay(frame, tracks, associations, faces, fps: float):
+def draw_overlay(frame, tracks, associations, faces, fps: float, timestamp: float):
     output = frame.copy()
     height, width = output.shape[:2]
     cv2.drawMarker(output, (width // 2, height // 2), (255, 255, 255),
@@ -41,11 +41,7 @@ def draw_overlay(frame, tracks, associations, faces, fps: float):
         state = track.identity.state.value
         color = STATE_COLORS[state]
         cv2.rectangle(output, (x1, y1), (x2, y2), color, 2)
-        confidence = track.identity.confidence(track.last_seen)
-        if index in face_by_body:
-            track.identity.observe_face(track.last_seen, max(track.score, 0.5))
-            state = track.identity.state.value
-            confidence = track.identity.confidence(track.last_seen)
+        confidence = track.identity.confidence(timestamp)
         label = f"ID {track.track_id} | {state} | C={confidence:.2f}"
         cv2.putText(output, label, (x1, max(18, y1 - 8)),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.48, color, 1, cv2.LINE_AA)
