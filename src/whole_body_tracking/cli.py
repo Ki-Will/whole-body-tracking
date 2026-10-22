@@ -79,23 +79,32 @@ def main():
             detections = detector.detect(frame)
             tracks = manager.update(detections, timestamp)
             faces = face_detector.detect(frame) if face_detector else []
-            associations = associate_faces_to_bodies(
-                faces, [track.box for track in tracks]
+            # Only associate faces with bodies detected in this frame.
+            # Stale predicted boxes remain visible but cannot claim a face.
+            active_indices = [i for i, track in enumerate(tracks) if track.missed_frames == 0]
+            local_associations = associate_faces_to_bodies(
+                faces, [tracks[i].box for i in active_indices]
             ) if face_detector else {}
+            associations = {
+                active_indices[body_index]: face_index
+                for body_index, face_index in local_associations.items()
+            }
 
-            for body_index, face_index in associations.items():
+            associated_indices = set(associations)
+            for body_index in associated_indices:
                 track = tracks[body_index]
                 face_confidence = max(0.0, min(1.0, float(track.score)))
                 track.identity.observe_face(timestamp, face_confidence)
-            for track in tracks:
-                if track.track_id not in {
-                    tracks[index].track_id for index in associations
-                }:
-                    track.identity.update(timestamp, track.missed_frames <= manager.max_missed_frames)
+            for index, track in enumerate(tracks):
+                if index not in associated_indices:
+                    track.identity.update(
+                        timestamp,
+                        body_track_valid=track.missed_frames <= manager.max_missed_frames,
+                    )
 
             fps = fps_meter.tick()
             if not args.no_display:
-                view = draw_overlay(frame, tracks, associations, faces, fps)
+                view = draw_overlay(frame, tracks, associations, faces, fps, timestamp)
                 cv2.imshow("Whole-Body Tracking (CPU)", view)
                 key = cv2.waitKey(1) & 0xFF
                 if key in (ord("q"), 27):
