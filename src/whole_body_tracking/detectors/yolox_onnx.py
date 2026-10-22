@@ -63,7 +63,7 @@ class YOLOXONNXDetector:
         outputs = self.session.run(self.output_names, {self.input_meta.name: blob})
         if not outputs:
             return []
-        pred = np.asarray(outputs[0])
+        pred = np.asarray(outputs[0]).copy()
         pred = np.squeeze(pred)
         if pred.ndim != 2:
             raise ValueError(
@@ -75,6 +75,33 @@ class YOLOXONNXDetector:
             pred = pred.T
         if pred.shape[1] < 6:
             raise ValueError(f"Unsupported prediction width {pred.shape[1]}; expected at least 6.")
+
+        # Decode standard raw YOLOX heads (e.g. 3549x85 at 416 or
+        # 8400x85 at 640). Already-decoded exports do not match these counts.
+        if pred.shape[1] == 85:
+            expected_count = sum(
+                (self.input_size // stride) ** 2
+                for stride in (8, 16, 32)
+            )
+            if pred.shape[0] == expected_count:
+                grids, strides = [], []
+                for stride in (8, 16, 32):
+                    grid_size = self.input_size // stride
+                    yv, xv = np.meshgrid(
+                        np.arange(grid_size),
+                        np.arange(grid_size),
+                        indexing="ij",
+                    )
+                    grids.append(
+                        np.stack((xv, yv), axis=-1).reshape(-1, 2)
+                    )
+                    strides.append(
+                        np.full((grid_size * grid_size, 1), stride, dtype=np.float32)
+                    )
+                grids = np.concatenate(grids, axis=0).astype(np.float32)
+                strides = np.concatenate(strides, axis=0).astype(np.float32)
+                pred[:, :2] = (pred[:, :2] + grids) * strides
+                pred[:, 2:4] = np.exp(np.clip(pred[:, 2:4], -10, 10)) * strides
 
         boxes, scores = [], []
         for row in pred:
