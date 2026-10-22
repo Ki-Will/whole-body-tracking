@@ -21,6 +21,7 @@ dev = ["pytest>=8,<9"]
 
 [project.scripts]
 whole-body-tracking = "whole_body_tracking.cli:main"
+whole-body-enroll = "whole_body_tracking.enrollment:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
