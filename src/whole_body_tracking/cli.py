@@ -43,8 +43,10 @@ def _make_person_detector(args):
         )
 
     if args.person_backend == "mediapipe":
-        confidence = args.confidence if args.confidence is not None else 0.5
-        nms_iou = args.nms_iou if args.nms_iou is not None else 0.3
+        confidence_arg = getattr(args, "confidence", None)
+        confidence = confidence_arg if confidence_arg is not None else 0.5
+        nms_iou_arg = getattr(args, "nms_iou", None)
+        nms_iou = nms_iou_arg if nms_iou_arg is not None else 0.3
         if args.input_size is not None and args.input_size != 224:
             raise ValueError("MediaPipe person detection uses a fixed 224x224 input.")
         return MediaPipePersonDetector(
@@ -53,12 +55,12 @@ def _make_person_detector(args):
             nms_iou=nms_iou,
         )
 
+    confidence_arg = getattr(args, "confidence", None)
     confidence = (
-        args.confidence
-        if args.confidence is not None
-        else settings.person_confidence
+        confidence_arg if confidence_arg is not None else settings.person_confidence
     )
-    nms_iou = args.nms_iou if args.nms_iou is not None else settings.nms_iou
+    nms_iou_arg = getattr(args, "nms_iou", None)
+    nms_iou = nms_iou_arg if nms_iou_arg is not None else settings.nms_iou
     return YOLOXONNXDetector(
         model_path,
         confidence=confidence,
